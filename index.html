@@ -5,10 +5,27 @@
 		<meta charset='utf-8'>
 		<script src="src/zmarkdown.js" type="text/javascript"></script>
 		<script>
-			var src = '#head1\nlskjdfslskdjf\n>##head2\n>zlkjvklx';
+			var src = [
+			    '# heading1',
+				'hahahhahaha',
+				'fkasjdfljsad',
+				'sdfjklslkdjfls',
+				'> ksjfdlksdjf',
+				'> fjaskjdfasd',
+				'## heading3',
+				'sfkldjflsd',
+                '    var sjflsd',
+                '   sdfasdfsadfasd',
+                '    sfsadfsd',
+                'sdfasdfsadfs'
+			].join('\n');
 			var t = new test();
 			t.parse(src);
 			console.log(t);
+
+			var b = '123.  ';
+			var match = Marker.list_item_width.exec(b);
+			console.log(match);
 		</script>
 	</head>
 	<body>

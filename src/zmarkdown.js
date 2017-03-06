@@ -1,198 +1,253 @@
 (function(global){
     'use strict';
 
-    var Reg = {
-        indent: /^ */g,
-        blank_line: /^ *$/g,
+    var Marker = {
+        indent: /^ */,
+        blank_line: /^ *$/,
+        list_item_width: /^([-_*]|\d{1,9}\.)( +)(\S+|$)/,
 
-        block_quote: /^>/g,
-        u_list: /^[-_\*]/g,
-        o_list: /^\d{1,9}\./g,
+        block_quote: /^> /,
+        list: /^([-_*]|\d{1,9}\.) /,
+        u_list: /^[-_*] /,
+        o_list: /^\d{1,9}\. /,
 
-        atx: /^#{1,6}/g,
-        thematic: / /g,
-        paragraph: /^[^\#-_\*\s]/g,
-        indented_code: / /g
+        thematic: /^([*-_]) *\1 *\1 *(\1 *)*$/,
+        atx: /^#{1,6}($| +)/,
+        indented_code: /^ {4,}/
     };
+
+    global.Marker = Marker;
 
     var INDENT_MAX = 3;
 
-    function consumeIndent(line){
-        var cap = Reg.indent.exec(line);
-        if(cap[0].length <=  INDENT_MAX){
-            line = line.substring(cap[0].length);
+    var Util = {
+        indentWidth: function(line){
+            var cap = Marker.indent.exec(line);
+            return cap[0].length;
+        },
+        consumeExtraIndent: function(line, indentWidth){
+            if(indentWidth <= INDENT_MAX){
+                line = line.substring(indentWidth);
+            }
+            return line;
+        },
+        listMarkerWidth: function(line){
+            var cap = Marker.list_item_width.exec(line);
+             return cap[1].length + (cap[3] ? cap[2].length : 1);
+        },
+        isBlankLine: function(line){
+            return Marker.blank_line.test(line);
         }
-        return line;
-    }
+    };
 
-    function blankLine(line){
-        return Reg.blank_line.test(line);
-    }
-
-    var Block = {
-        doc: {
-            canContain: function(line){ return true; },
-            rest: function(line){ return line; }
-        },
-        block_quote: {
-            canContain: function(line){
-                // console.log('----');
-                // console.log(/^>/.test(line));
-                // console.log(Reg.block_quote.test(line));
-                // console.log(line);
-                // console.log(/^>/.test(line));
-                // console.log(Reg.block_quote.test(line));
-                // console.log(line);
-                // console.log('----');
-                return (/^>/.test(line));
-                return Reg.block_quote.test(line);
-            },
-            rest: function(line){
-                //>XXXXX
-                line = line.substring(1);
-                return line;
+    var Node = {
+        /**
+         *
+         * @param node
+         * @param line
+         * @returns {Boolean}
+         */
+        transverse: function(node, line){
+            var indentWidth = Util.indentWidth(line);
+            line = Util.consumeExtraIndent(line);
+            if(node instanceof ContainerNode){
+                if(node.open && node.isContent(line)){
+                    var n = node.children.length;
+                    var rest = node.rest(line);
+                    if(n){
+                        var r = Node.transverse(node.children[n - 1], rest);
+                        if(r){ return true; }
+                    }
+                    var contentType = Node.contentType(node, rest);
+                    var newNode = Node.factory(contentType, rest, indentWidth);
+                    if(contentType.container){
+                        Node.transverse(newNode, rest);
+                    }
+                    node.children.push(newNode);
+                    return true;
+                }else{
+                    return false;
+                }
+            }else if(node instanceof LeafNode){
+                if(node.open && node.isContent(line)){
+                    //append
+                    return true;
+                }else{
+                    return false;
+                }
             }
         },
-        u_list: {
-            canContain: function(line){
-                return Reg.u_list.test(line);
-            },
-            rest: function(line){
-                //-XXXX
-                line = line.substring(1);
-                return line;
-            }
-        },
-        o_list: {
-            canContain: function(line){
-                return Reg.o_list.test(line);
-            },
-            rest: function(line){
-                line = line.substring(1);
-                return line;
-            }
-        },
-        thematic: {
-            canAppend: function(line){
-                return Reg.thematic.test(line);
-            },
-            rest: function(line){
 
+        contentType: function(node, line){
+            if(Marker.block_quote.test(line)){
+                return { type: 'block_quote', container: true };
+            }else if(Marker.u_list.test(line)){
+                if(node.type === 'u_list'){
+                    return { type: 'u_list_item', container: true };
+                }else{
+                    return { type: 'u_list', container: true };
+                }
+            }else if(Marker.o_list.test(line)){
+                if(node.type === 'o_list'){
+                    return { type: 'o_list_item', container: true };
+                }else{
+                    return { type: 'o_list', container: true };
+                }
+            }else if(Marker.thematic.test(line)){
+                return { type: 'thematic', container: false };
+            }else if(Marker.atx.test(line)){
+                return { type: 'atx', container: false };
+            }else if(Marker.indented_code.test(line)){
+                return { type: 'indented_code', container: false };
+            }else{
+                return { type: 'paragraph', container: false };
             }
         },
-        atx: {
-            canAppend: function(line){
-                return Reg.atx.test(line);
-            },
-            rest: function(line){
 
-            }
-        },
-        paragraph: {
-            canAppend: function(line){
-                // return Reg.atx.test(line);
-                return false;
-            },
-            rest: function(line){
-
+        factory: function(contentType, line, indentWidth){
+            var node = null;
+            if(contentType.container){
+                if(contentType.type === 'block_quote'){
+                    return new ContainerNode('block_quote', null);
+                }else if(contentType.type === 'u_list'){
+                    var markerWidth = Util.listMarkerWidth(line);
+                    return new ContainerNode('u_list', {markerWidth: markerWidth + indentWidth});
+                }else if(contentType.type === 'o_list'){
+                    var markerWidth = Util.listMarkerWidth(line);
+                    return new ContainerNode('o_list', {markerWidth: markerWidth + indentWidth});
+                }else if(contentType.type === 'u_list_item'){
+                    return new ContainerNode('u_list_item', null);
+                }else if(contentType.type === 'o_list_item'){
+                    return new ContainerNode('o_list_item', null);
+                }
+            }else{
+                if(contentType.type === 'thematic'){
+                    return new LeafNode('thematic', null);
+                }else if(contentType.type === 'atx'){
+                    return new LeafNode('atx', null);
+                }else if(contentType.type === 'indented_code'){
+                    return new LeafNode('indented_code', null);
+                }else if(contentType.type === 'paragraph'){
+                    return new LeafNode('paragraph', null);
+                }
             }
         }
     };
 
-    //doc node definition
-    function Node(type, container, open){
+    /**
+     * ContainerNode
+     * @param {String} type
+     * @param {Object} misc
+     * @constructor
+     */
+    function ContainerNode(type, misc){
         this.type = type;
-        this.container = container;
-        this.open = open;
+        this.open = true;
+        this.misc = misc || null;
         this.children = [];
     }
 
-    Node.transverse = function(node, line){
-        line = consumeIndent(line);
+    ContainerNode.prototype.isContent = function(line){
+        return ContainerNode.helpers.isContent[this.type](line);
+    };
 
-        if(node.container){
-            var canContain = Block[node.type].canContain(line);
-            if(!canContain){
-                node.open = false;
-                return false;
-            }
+    ContainerNode.prototype.rest = function(line){
+        return ContainerNode.helpers.rest[this.type](line);
+    };
 
-            var rest = Block[node.type].rest(line);
-            var n = node.children.length;
-            if(n){
-                var lastChild = node.children[n - 1];
-                var consumed = Node.transverse(lastChild, rest);
-            }
-            if(!n || !consumed){
-                var newNode = Node.factory(rest);
-                node.children.push(newNode);
-                return true;
-            }
-        }else{
-            var canAppend = Block[node.type].canAppend(line);
-            console.log(node);
-            console.log(canAppend)
-            if(!canAppend){
-                node.open = false;
-                return false;
-            }else{
-                return true;
+    ContainerNode.prototype.close = function(){
+        this.open = false;
+        var n = this.children.length;
+        this.children[n - 1].close();
+    };
+
+    ContainerNode.helpers = {
+        isContent: {
+            'doc': function(){ return true; },
+            'block_quote': function(line){
+                return !Util.isBlankLine(line) && Marker.block_quote.test(line);
+            },
+            'u_list': function(line){ return Marker.u_list.test(line); },
+            'o_list': function(line){ return Marker.o_list.test(line); }
+        },
+        rest: {
+            'doc': function(line){ return line; },
+            'block_quote': function(line){
+                return line.substring(2);
+            },
+            'u_list': function(line){ return line; },
+            'o_list': function(line){ return line; }
+        }
+    };
+
+    /**
+     * LeafNode
+     * @param {String} type
+     * @param {String} misc
+     * @constructor
+     */
+    function LeafNode(type, misc){
+        this.type = type;
+        this.open = type !== 'thematic' || type !== 'atx' || type !== 'setext';
+        this.misc = misc;
+    }
+
+    LeafNode.prototype.isContent = function(line){
+        return LeafNode.helpers.isContent[this.type](line);
+    };
+
+    LeafNode.prototype.setText = function(line){};
+
+    LeafNode.prototype.close = function(){
+        this.open = false;
+    };
+
+    LeafNode.helpers = {
+        isContent: {
+            'thematic': function(line){ return Marker.thematic.test(line); },
+            'atx': function(line){ return Marker.atx.test(line); },
+            'indented_code': function(line){
+                return Marker.indented_code.test(line) || Util.isBlankLine(line);
+            },
+            'paragraph': function(line){
+                return !Util.isBlankLine(line)
+                    && !Marker.block_quote.test(line)
+                    && !Marker.u_list.test(line)
+                    && !Marker.o_list.test(line)
+                    && !Marker.thematic.test(line)
+                    && !Marker.atx.test(line)
+                    && !Marker.indented_code.test(line);
             }
         }
     };
 
-    Node.factory = function(line){
-        var node = null;
-        if(Reg.block_quote.test(line)){
-            node = new Node('block_quote', true, true);
-            Node.transverse(node, line);
-        }else if(Reg.u_list.test(line)){
-            node = new Node('list', true, true);
-            node.children.push(new Node('u_list', true, true));
-        }else if(Reg.o_list.test(line)){
-            node = new Node('list', true, true);
-            node.children.push(new Node('o_list', true, true));
-        }else if(Reg.thematic.test(line)){
-            node = new Node('thematic', false, false);
-        }else if(Reg.atx.test(line)){
-            node = new Node('atx', false, false);
-        }else if(Reg.indented_code.test(line)){
-            node = new Node('indented_code', false, true);
-        }else{
-            //paragraph
-            node = new Node('paragraph', false, true);
-        }
-        return node;
-    };
-
-
-    //parser definition
+    /**
+     * Parser
+     * @constructor
+     */
     function Parser(){
         this.lines = null;
-        this.lineIdx = 0;
         this.doc = null;
     }
 
     Parser.prototype = {
         constructor: Parser,
 
-        preprocess: function(src){
+        init: function(src){
             //whitespaces should all be transformed to ' '
             src = src
                 .replace(/\r\n?|\n/g, '\n')
                 .replace(/\t/g, '    ');
             this.lines = src.split(/\n/);
-            this.doc = new Node('doc', true, true);
-            this.lineIdx = 0;
+            this.doc = new ContainerNode('doc', null);
         },
 
         parse: function(src){
-            this.preprocess(src);
+            this.init(src);
 
             while(this.lines.length){
                 var line = this.lines.shift();
                 Node.transverse(this.doc, line);
-
             }
         }
     }
