@@ -2,10 +2,11 @@
  * Created by zwy on 17-3-7.
  */
 ;(function(global){
+
     "use strict";
 
-    /* todo `blank line`不会截断`indented code` */
-    /* todo `blank line`造成`loose list` */
+    /* todo `blank line` 不会截断 `indented code` */
+    /* todo `blank line` 造成 `loose list` */
 
     /**
      * Parse markdown to block tree.
@@ -37,6 +38,15 @@
         }
     };
 
+    /**
+     * Block
+     * @param type
+     * @param isContainer
+     * @param isMulti
+     * @param idx
+     * @param src
+     * @constructor
+     */
     function Block(type, isContainer, isMulti, idx, src){
         this._type = type;
         this._isContainer = isContainer;
@@ -73,7 +83,7 @@
     Block.prototype.consumeFirst = function(){
         var line = this.src[this.idx ++];
         var indentWidth = helpers.indentWidth(line);
-        if(this.isUListItemStart(line)){
+        if(Marker.u_list_item.test(line)){
             var cap = Capture.u_list_item.exec(line);
             this.misc.bullet = cap[1];
             this.misc.markerWidth = indentWidth + 2;
@@ -83,7 +93,7 @@
             this.misc.itemIndent = this.misc.markerWidth + markerTrimmedIndent;
             this.content = [markerTrimmed];
             
-        }else if(this.isOListItemStart(line)){
+        }else if(Marker.o_list_item.test(line)){
             var cap = Capture.o_list_item.exec(line);
             this.misc.bullet = cap[2];
             this.misc.markerWidth = indentWidth + cap[1].length + 1;
@@ -93,9 +103,9 @@
             this.misc.itemIndent = this.misc.markerWidth + markerTrimmedIndent;
             this.content = [markerTrimmed];
             
-        }else if(this.isIndentedCode(line)){
+        }else if(Marker.indented_code.test(line)){
             this.content = line.substring(4) + '\n';
-        }else if(this.isBlockQuote(line)){
+        }else if(Marker.block_quote.test(line)){
             this.content = [line.substring(indentWidth + 2)];
         }else{
             //paragraph
@@ -108,11 +118,10 @@
         while(this.idx < this.src.length){
             var line = this.src[this.idx];
             var indentWidth = helpers.indentWidth(line);
-            console.log('oops');
 
-            if(this.isOListItemStart(line)){
+            if(Marker.u_list_item.test(line)){
                 this.open = false;
-            }else if(this.isUListItemStart(line)){
+            }else if(Marker.o_list_item.test(line)){
                 this.open = false;
             }else if(this._type === 'u_list_item' && indentWidth >= this.misc.itemIndent){
                 this.content.push(line.substring(this.misc.markerWidth));
@@ -120,26 +129,20 @@
             }else if(this._type === 'o_list_item' && indentWidth >= this.misc.itemIndent){
                 this.content.push(line.substring(this.misc.markerWidth));
                 this.idx ++;
-            }else if(this.isBlockQuote(line)){
+            }else if(Marker.block_quote.test(line)){
                 if(this._type === 'block_quote') {
                     this.content.push(line.substring(indentWidth + 2));
                     this.idx++;
-                }else{
-                    this.open = false;
-                }
-            }else if(this.isIndentedCode(line)){
+                }else{ this.open = false; }
+            }else if(Marker.indented_code.test(line)){
                 if(this._type === 'indented_code') {
                     this.content += line + '\n';
                     this.idx++;
-                }else{
-                    this.open = false;
-                }
+                }else{ this.open = false; }
             }else if(this._type === 'paragraph'){
                 this.content += line + '\n';
                 this.idx ++;
-            }else{
-                this.open = false;
-            }
+            }else{ this.open = false; }
             if(!this.open){ break; }
         }
         this.open = false;
@@ -157,30 +160,6 @@
         }
     };
     
-    Block.prototype.isAtx = function(line){
-        return Marker.atx.test(line);
-    };
-    
-    Block.prototype.isThematic = function(line){
-        return Marker.thematic.test(line);
-    };
-    
-    Block.prototype.isBlockQuote = function(line){
-        return Marker.block_quote.test(line);
-    };
-
-    Block.prototype.isIndentedCode = function(line){
-        return Marker.indented_code.test(line);
-    };
-
-    Block.prototype.isUListItemStart = function(line){
-        return Marker.u_list_item.test(line);
-    };
-
-    Block.prototype.isOListItemStart = function(line){
-        return Marker.o_list_item.test(line);
-    };
-    
     Block.prototype.parse = function(){
 
         if(this._isContainer) {
@@ -188,17 +167,17 @@
                 var line = this.src[this.idx];
                 var child = null;
 
-                if (this.isAtx(line)) {
+                if (Marker.atx.test(line)) {
                     child = new Block('atx', false, false, this.idx, this.src);
-                } else if (this.isThematic(line)) {
+                } else if (Marker.thematic.test(line)) {
                     child = new Block('thematic', false, false, this.idx, this.src);
-                } else if (this.isBlockQuote(line)) {
+                } else if (Marker.block_quote.test(line)) {
                     child = new Block('block_quote', true, true, this.idx, this.src);
-                } else if (this.isUListItemStart(line)) {
+                } else if (Marker.u_list_item.test(line)) {
                     child = new Block('u_list_item', true, true, this.idx, this.src);
-                } else if (this.isOListItemStart(line)){
+                } else if (Marker.o_list_item.test(line)){
                     child = new Block('o_list_item', true, true, this.idx, this.src);
-                } else if (this.isIndentedCode(line)) {
+                } else if (Marker.indented_code.test(line)) {
                     child = new Block('indented_code', false, true, this.idx, this.src);
                 } else {
                     //paragraph
@@ -211,6 +190,10 @@
         }
     };
 
+    /**
+     * Parser
+     * @constructor
+     */
     function Parser(){
         this.doc = null;
     }
@@ -236,18 +219,23 @@
 })(this);
 
 (function(global){
+
     "use strict";
 
     /**
      * Transfer block tree to html.
      */
 
-    function Translator(doc){
-        this.doc = doc;
+    /**
+     *
+     * @param doc
+     * @constructor
+     */
+    function Translator(){
     }
 
-    Translator.prototype.translate = function(){
-        this.doTranslate(this.doc);
+    Translator.prototype.translate = function(doc){
+        return this.doTranslate(doc);
     };
 
     Translator.prototype.doTranslate = function(block){
@@ -255,20 +243,46 @@
         var tpl = this.tpl(block);
         var html = '';
 
-        var inList = false;
-        for(var i = 0; i < block.children.length; i++){
-            var child = block.children[i];
-            
-            html += this.doTranslate(child);
+        if(block._isContainer) {
 
+            var inList = false;
+            var listType = null;
+            var bullet = null;
+
+            for (var i = 0; i < block.children.length; i++) {
+                var child = block.children[i];
+                var type = child._type;
+                if (!inList && (type === 'u_list_item' || type === 'o_list_item')){
+                    html += type === 'u_list_item' ? '</ul>' : '</ol>';
+                    inList = true;
+                    listType = type;
+                    bullet = child.misc.bullet;
+                }
+
+                if (inList && (type !== listType
+                        || child.misc.bullet !== bullet)) {
+                    html += listType === 'u_list_item' ? '</ul>' : '</ol>';
+                    inList = false;
+                    listType = null;
+                    bullet = null;
+                    continue;
+                } else {
+                    html += this.doTranslate(child);
+                }
+            }
+            if(inList){ html += listType === 'u_list_item' ? '</ul>' : '</ol>'; }
+            html = tpl.replace('{}', html);
+        }else{
+            html = tpl.replace('{}', block.content);
         }
-        html = tpl.replace('{}', html);
         return html;
     };
 
-    Translator.prototype.tpl = function(block){
-        var type = block.type;
-        if(type === 'thematic'){
+    Translator.prototype.tpl = function(block) {
+        var type = block._type;
+        if(type === 'doc'){
+            return '{}';
+        }else if(type === 'thematic'){
             return '<hr>';
         }else if(type === 'atx'){
             var lvl = block.misc.lvl;
