@@ -8,11 +8,7 @@
     /* todo `blank line` 不会截断 `indented code` */
     /* todo `blank line` 造成 `loose list` */
 
-    /**
-     * Parse markdown to block tree.
-     */
-
-    var Marker = {
+    var marker = {
         blank_line: /^\s*$/,
 
         thematic: /^ {0,3}([*-_]){3}\s*$/,
@@ -24,8 +20,8 @@
         o_list_item: /^ {0,3}\d{1,9}(\.|\)) /
     };
 
-    //After passing marker test, use Capture to the parse the content.
-    var Capture = {
+    //After passing marker test, use capture to the parse the content.
+    var capture = {
         atx: /^ {0,3}(#{1,6})(.* (?=#)|.*$)/,
         u_list_item: /^ {0,3}([-_*])/,
         o_list_item: /^ {0,3}(\d{1,9})(\.|\))/
@@ -57,7 +53,7 @@
         this.open = isMulti;
 
         this.children = [];
-        this.content = null;
+        this.content = '';
         this.misc = {};
     }
 
@@ -83,8 +79,8 @@
     Block.prototype.consumeFirst = function(){
         var line = this.src[this.idx ++];
         var indentWidth = helpers.indentWidth(line);
-        if(Marker.u_list_item.test(line)){
-            var cap = Capture.u_list_item.exec(line);
+        if(marker.u_list_item.test(line)){
+            var cap = capture.u_list_item.exec(line);
             this.misc.bullet = cap[1];
             this.misc.markerWidth = indentWidth + 2;
 
@@ -93,8 +89,8 @@
             this.misc.itemIndent = this.misc.markerWidth + markerTrimmedIndent;
             this.content = [markerTrimmed];
             
-        }else if(Marker.o_list_item.test(line)){
-            var cap = Capture.o_list_item.exec(line);
+        }else if(marker.o_list_item.test(line)){
+            var cap = capture.o_list_item.exec(line);
             this.misc.bullet = cap[2];
             this.misc.markerWidth = indentWidth + cap[1].length + 1;
 
@@ -103,9 +99,9 @@
             this.misc.itemIndent = this.misc.markerWidth + markerTrimmedIndent;
             this.content = [markerTrimmed];
             
-        }else if(Marker.indented_code.test(line)){
+        }else if(marker.indented_code.test(line)){
             this.content = line.substring(4) + '\n';
-        }else if(Marker.block_quote.test(line)){
+        }else if(marker.block_quote.test(line)){
             this.content = [line.substring(indentWidth + 2)];
         }else{
             //paragraph
@@ -119,9 +115,9 @@
             var line = this.src[this.idx];
             var indentWidth = helpers.indentWidth(line);
 
-            if(Marker.u_list_item.test(line)){
+            if(marker.u_list_item.test(line)){
                 this.open = false;
-            }else if(Marker.o_list_item.test(line)){
+            }else if(marker.o_list_item.test(line)){
                 this.open = false;
             }else if(this._type === 'u_list_item' && indentWidth >= this.misc.itemIndent){
                 this.content.push(line.substring(this.misc.markerWidth));
@@ -129,12 +125,12 @@
             }else if(this._type === 'o_list_item' && indentWidth >= this.misc.itemIndent){
                 this.content.push(line.substring(this.misc.markerWidth));
                 this.idx ++;
-            }else if(Marker.block_quote.test(line)){
+            }else if(marker.block_quote.test(line)){
                 if(this._type === 'block_quote') {
                     this.content.push(line.substring(indentWidth + 2));
                     this.idx++;
                 }else{ this.open = false; }
-            }else if(Marker.indented_code.test(line)){
+            }else if(marker.indented_code.test(line)){
                 if(this._type === 'indented_code') {
                     this.content += line + '\n';
                     this.idx++;
@@ -152,7 +148,7 @@
         var line = this.src[this.idx ++];
         if(this._type === 'atx'){
 
-            var cap = Capture.atx.exec(line);
+            var cap = capture.atx.exec(line);
             this.misc.lvl = cap[1].length;
             this.content += cap[2].trim();
         }else if(this._type === 'thematic'){
@@ -167,17 +163,17 @@
                 var line = this.src[this.idx];
                 var child = null;
 
-                if (Marker.atx.test(line)) {
+                if (marker.atx.test(line)) {
                     child = new Block('atx', false, false, this.idx, this.src);
-                } else if (Marker.thematic.test(line)) {
+                } else if (marker.thematic.test(line)) {
                     child = new Block('thematic', false, false, this.idx, this.src);
-                } else if (Marker.block_quote.test(line)) {
+                } else if (marker.block_quote.test(line)) {
                     child = new Block('block_quote', true, true, this.idx, this.src);
-                } else if (Marker.u_list_item.test(line)) {
+                } else if (marker.u_list_item.test(line)) {
                     child = new Block('u_list_item', true, true, this.idx, this.src);
-                } else if (Marker.o_list_item.test(line)){
+                } else if (marker.o_list_item.test(line)){
                     child = new Block('o_list_item', true, true, this.idx, this.src);
-                } else if (Marker.indented_code.test(line)) {
+                } else if (marker.indented_code.test(line)) {
                     child = new Block('indented_code', false, true, this.idx, this.src);
                 } else {
                     //paragraph
@@ -190,95 +186,23 @@
         }
     };
 
-    /**
-     * Parser
-     * @constructor
-     */
-    function Parser(){
-        this.doc = null;
-    }
-
-    Parser.prototype.preProc = function(src){
+    function parse(src){
         //pre-process
         src = src
             .replace(/\r\n?|\n/g, '\n')
-            .replace(/\t/g, '    ');
-        return src.split(/\n/);
-    };
+            .replace(/\t/g, '    ')
+            .split(/\n/);
 
-    Parser.prototype.parse = function(src){
-        src = this.preProc(src);
         var doc = new Block('doc', true, true, 0, src);
         doc.parse();
-        this.doc = doc;
-    };
-
-    global.Parser = Parser;
-    global.Capture = Capture;
-
-})(this);
-
-(function(global){
-
-    "use strict";
-
-    /**
-     * Transfer block tree to html.
-     */
-
-    /**
-     *
-     * @param doc
-     * @constructor
-     */
-    function Translator(){
+        return doc;
     }
 
-    Translator.prototype.translate = function(doc){
-        return this.doTranslate(doc);
-    };
+    function translate(doc){
+        return translate.doTranslate(doc);
+    }
 
-    Translator.prototype.doTranslate = function(block){
-
-        var tpl = this.tpl(block);
-        var html = '';
-
-        if(block._isContainer) {
-
-            var inList = false;
-            var listType = null;
-            var bullet = null;
-
-            for (var i = 0; i < block.children.length; i++) {
-                var child = block.children[i];
-                var type = child._type;
-                if (!inList && (type === 'u_list_item' || type === 'o_list_item')){
-                    html += type === 'u_list_item' ? '</ul>' : '</ol>';
-                    inList = true;
-                    listType = type;
-                    bullet = child.misc.bullet;
-                }
-
-                if (inList && (type !== listType
-                        || child.misc.bullet !== bullet)) {
-                    html += listType === 'u_list_item' ? '</ul>' : '</ol>';
-                    inList = false;
-                    listType = null;
-                    bullet = null;
-                    continue;
-                } else {
-                    html += this.doTranslate(child);
-                }
-            }
-            if(inList){ html += listType === 'u_list_item' ? '</ul>' : '</ol>'; }
-            html = tpl.replace('{}', html);
-        }else{
-            html = tpl.replace('{}', block.content);
-        }
-        return html;
-    };
-
-    Translator.prototype.tpl = function(block) {
+    translate.tpl = function(block) {
         var type = block._type;
         if(type === 'doc'){
             return '{}';
@@ -298,5 +222,54 @@
         }
     };
 
-    global.Translator = Translator;
+    translate.doTranslate = function(block){
+        var tpl = translate.tpl(block);
+        var html = '';
+
+        if(block._isContainer) {
+
+            var inList = false;
+            var listType = null;
+            var bullet = null;
+
+            for (var i = 0; i < block.children.length; i++) {
+                var child = block.children[i];
+                var type = child._type;
+
+                //wrap list items width '<ul>' or '<ol>'
+                if (!inList && (type === 'u_list_item' || type === 'o_list_item')){
+                    html += type === 'u_list_item' ? '</ul>' : '</ol>';
+                    inList = true;
+                    listType = type;
+                    bullet = child.misc.bullet;
+                }
+
+                if (inList && (type !== listType
+                    || child.misc.bullet !== bullet)) {
+                    html += listType === 'u_list_item' ? '</ul>' : '</ol>';
+                    inList = false;
+                    listType = null;
+                    bullet = null;
+                    continue;
+                } else {
+                    html += this.doTranslate(child);
+                }
+            }
+            if(inList){ html += listType === 'u_list_item' ? '</ul>' : '</ol>'; }
+            html = tpl.replace('{}', html);
+        }else{
+            html = tpl.replace('{}', block.content);
+        }
+        return html;
+    };
+
+
+
+    global.zmarkdown = {
+        compile: function(src){
+            var doc = parse(src);
+            return translate(doc);
+        }
+    };
+
 })(this);
