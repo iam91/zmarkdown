@@ -51,6 +51,14 @@
 		<script type="text/javascript">
             var mdeditor = new Mdeditor();
             mdeditor.init($('#editor'));
+
+           	var t = null;
+           	var str = 'fsadlkjfsd*ljkkl*fsad_vvcv_';
+            while(t = inlineMarker.emphasis.exec(str)){
+                console.log(t);
+			}
+			var s = str.replace(inlineMarker.emphasis, '<em>$3</em>');
+			console.log(s);
 		</script>
 	</body>
 </html>

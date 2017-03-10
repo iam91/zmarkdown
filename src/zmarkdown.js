@@ -7,13 +7,13 @@
 
     // todo `blank line` 不会截断 `indented code`
     // todo `blank line` 造成 `loose list`
-    // todo fix parsing bugs
 
-    var marker = {
+    var blockMarker = {
         blank_line: /^\s*$/,
 
         thematic: /^ {0,3}([*-_]){3}\s*$/,
         atx: /^ {0,3}#{1,6}($| +)/,
+        setext: /^ {0,3}(-|=)\1{2,}\s*/,
         indented_code: /^ {4,}/,
 
         block_quote: /^ {0,3}> /,
@@ -21,11 +21,20 @@
         o_list_item: /^ {0,3}\d{1,9}(\.|\)) /
     };
 
-    //After passing marker test, use capture to the parse the content.
+    var inlineMarker = {
+        code_span: /(`([^`]*)`)/g,
+        emphasis: /((\*|_)([^*]*)\2)/g,
+        strong_emphasis: /((\*\*|__)([^*]*)\2)/g
+    };
+
+    global.inlineMarker = inlineMarker;
+
+    //After passing blockMarker test, use capture to the parse the content.
     var capture = {
         atx: /^ {0,3}(#{1,6})(.* (?=#)|.*$)/,
+        setext: /^ {0,3}(-|=)/,
         u_list_item: /^ {0,3}([-_*])/,
-        o_list_item: /^ {0,3}(\d{1,9})(\.|\))/
+        o_list_item: /^ {0,3}(\d{1,9})(\.|\))/,
     };
 
     var helpers = {
@@ -80,33 +89,33 @@
     Block.prototype.consumeFirst = function(){
         var line = this.src[this.idx ++];
         var indentWidth = helpers.indentWidth(line);
-        if(marker.u_list_item.test(line)){
+        if(blockMarker.u_list_item.test(line)){
             var cap = capture.u_list_item.exec(line);
             this.misc.bullet = cap[1];
-            this.misc.markerWidth = indentWidth + 2;
+            this.misc.blockMarkerWidth = indentWidth + 2;
 
-            var markerTrimmed = line.substring(this.misc.markerWidth);
-            var markerTrimmedIndent = helpers.indentWidth(markerTrimmed);
-            this.misc.itemIndent = this.misc.markerWidth + markerTrimmedIndent;
-            this.content = [markerTrimmed];
+            var blockMarkerTrimmed = line.substring(this.misc.blockMarkerWidth);
+            var blockMarkerTrimmedIndent = helpers.indentWidth(blockMarkerTrimmed);
+            this.misc.itemIndent = this.misc.blockMarkerWidth + blockMarkerTrimmedIndent;
+            this.content = [blockMarkerTrimmed];
             
-        }else if(marker.o_list_item.test(line)){
+        }else if(blockMarker.o_list_item.test(line)){
             var cap = capture.o_list_item.exec(line);
             this.misc.bullet = cap[2];
-            this.misc.markerWidth = indentWidth + cap[1].length + 1;
+            this.misc.blockMarkerWidth = indentWidth + cap[1].length + 1;
 
-            var markerTrimmed = line.substring(this.misc.markerWidth);
-            var markerTrimmedIndent = helpers.indentWidth(markerTrimmed);
-            this.misc.itemIndent = this.misc.markerWidth + markerTrimmedIndent;
-            this.content = [markerTrimmed];
+            var blockMarkerTrimmed = line.substring(this.misc.blockMarkerWidth);
+            var blockMarkerTrimmedIndent = helpers.indentWidth(blockMarkerTrimmed);
+            this.misc.itemIndent = this.misc.blockMarkerWidth + blockMarkerTrimmedIndent;
+            this.content = [blockMarkerTrimmed];
             
-        }else if(marker.indented_code.test(line)){
+        }else if(blockMarker.indented_code.test(line)){
             this.content = line.substring(4) + '\n';
-        }else if(marker.block_quote.test(line)){
+        }else if(blockMarker.block_quote.test(line)){
             this.content = [line.substring(indentWidth + 2)];
         }else{
             //paragraph
-            this.content = line.trim() + '\n';
+            this.content = line.trim();
         }
     };
 
@@ -117,27 +126,33 @@
             var indentWidth = helpers.indentWidth(line);
 
             if(this._type === 'u_list_item' && indentWidth >= this.misc.itemIndent){
-                this.content.push(line.substring(this.misc.markerWidth));
+                this.content.push(line.substring(this.misc.blockMarkerWidth));
                 this.idx ++;
             }else if(this._type === 'o_list_item' && indentWidth >= this.misc.itemIndent){
-                this.content.push(line.substring(this.misc.markerWidth));
+                this.content.push(line.substring(this.misc.blockMarkerWidth));
                 this.idx ++;
-            }else if(marker.u_list_item.test(line)){
+            }else if(blockMarker.u_list_item.test(line)){
                 this.open = false;
-            }else if(marker.o_list_item.test(line)){
+            }else if(blockMarker.o_list_item.test(line)){
                 this.open = false;
-            }else if(marker.block_quote.test(line)){
+            }else if(blockMarker.block_quote.test(line)){
                 if(this._type === 'block_quote') {
                     this.content.push(line.substring(indentWidth + 2));
                     this.idx++;
                 }else{ this.open = false; }
-            }else if(marker.indented_code.test(line)){
+            }else if(blockMarker.setext.test(line) && this._type === 'paragraph'){
+
+                var cap = capture.setext.exec(line);
+                this._type = 'setext';
+                this.misc.lvl = cap[1] === '-' ? 2 : 1;
+                this.idx ++;
+            }else if(blockMarker.indented_code.test(line)){
                 if(this._type === 'indented_code') {
-                    this.content += line + '\n';
+                    this.content += line.trim() + '\n';
                     this.idx++;
                 }else{ this.open = false; }
-            }else if(this._type === 'paragraph'){
-                this.content += line + '\n';
+            }else if(!blockMarker.blank_line.test(line) && this._type === 'paragraph'){
+                this.content += line;
                 this.idx ++;
             }else{ this.open = false; }
             if(!this.open){ break; }
@@ -164,21 +179,25 @@
                 var line = this.src[this.idx];
                 var child = null;
 
-                if (marker.atx.test(line)) {
+                if (blockMarker.atx.test(line)) {
                     child = new Block('atx', false, false, this.idx, this.src);
-                } else if (marker.thematic.test(line)) {
+                } else if (blockMarker.thematic.test(line)) {
                     child = new Block('thematic', false, false, this.idx, this.src);
-                } else if (marker.block_quote.test(line)) {
+                } else if (blockMarker.block_quote.test(line)) {
                     child = new Block('block_quote', true, true, this.idx, this.src);
-                } else if (marker.u_list_item.test(line)) {
+                } else if (blockMarker.u_list_item.test(line)) {
                     child = new Block('u_list_item', true, true, this.idx, this.src);
-                } else if (marker.o_list_item.test(line)){
+                } else if (blockMarker.o_list_item.test(line)) {
                     child = new Block('o_list_item', true, true, this.idx, this.src);
-                } else if (marker.indented_code.test(line)) {
+                } else if (blockMarker.indented_code.test(line)) {
                     child = new Block('indented_code', false, true, this.idx, this.src);
-                } else {
+                } else if (!blockMarker.blank_line.test(line)) {
                     //paragraph
                     child = new Block('paragraph', false, true, this.idx, this.src);
+                } else {
+                    //blank line
+                    this.idx ++;
+                    continue;
                 }
                 this.idx = child.consume();
                 child.parse();
@@ -212,6 +231,9 @@
         }else if(type === 'atx'){
             var lvl = block.misc.lvl;
             return '<h' + lvl + '>{}</h' + lvl + '>\n';
+        }else if(type === 'setext'){
+            var lvl = block.misc.lvl;
+            return '<h' + lvl + '>{}</h' + lvl + '>\n';
         }else if(type === 'indented_code'){
             return '<pre><code>{}</code></pre>\n';
         }else if(type === 'paragraph'){
@@ -221,6 +243,14 @@
         }else if(type === 'u_list_item' || type === 'o_list_item'){
             return '<li>{}</li>\n';
         }
+    };
+    
+    translate.parseInline = function(content){
+        content = content
+            .replace(inlineMarker.strong_emphasis, '<strong>$3</strong>')
+            .replace(inlineMarker.emphasis, '<em>$3</em>')
+            .replace(inlineMarker.code_span, '<code>$2</code>');
+        return content;
     };
 
     translate.doTranslate = function(block){
@@ -260,12 +290,11 @@
             if(inList){ html += listType === 'u_list_item' ? '</ul>\n' : '</ol>\n'; }
             html = tpl.replace('{}', html);
         }else{
-            html = tpl.replace('{}', block.content);
+            html = translate.parseInline(block.content);
+            html = tpl.replace('{}', html);
         }
         return html;
     };
-
-
 
     global.zmarkdown = {
         compile: function(src){
