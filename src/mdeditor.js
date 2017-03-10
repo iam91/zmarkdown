@@ -5,6 +5,9 @@
 
     "use strict";
 
+    // todo script and css dependencies loading
+    // todo efficiency of re-rendering on change
+
     function Mdeditor(){
         this.codeEditor;
     }
@@ -46,6 +49,13 @@
             this.initCodeEditor($('.' + className.code)[0]);
             this.bind();
             this.compile();
+            /////////////////////
+            var self = this;
+            $('button').click(function(){
+                self.compile();
+                console.log($(selector.preview)[0]);
+            });
+            /////////////////////
         },
 
         initCodeEditor: function(code){
@@ -72,9 +82,9 @@
             var ce = this.codeEditor;
             var self = this;
 
-            ce.on('change', function(){
-                self.compile();
-            });
+            // ce.on('change', function(){
+            //     self.compile();
+            // });
         }
     };
 

@@ -5,8 +5,9 @@
 
     "use strict";
 
-    /* todo `blank line` 不会截断 `indented code` */
-    /* todo `blank line` 造成 `loose list` */
+    // todo `blank line` 不会截断 `indented code`
+    // todo `blank line` 造成 `loose list`
+    // todo fix parsing bugs
 
     var marker = {
         blank_line: /^\s*$/,
@@ -115,16 +116,16 @@
             var line = this.src[this.idx];
             var indentWidth = helpers.indentWidth(line);
 
-            if(marker.u_list_item.test(line)){
-                this.open = false;
-            }else if(marker.o_list_item.test(line)){
-                this.open = false;
-            }else if(this._type === 'u_list_item' && indentWidth >= this.misc.itemIndent){
+            if(this._type === 'u_list_item' && indentWidth >= this.misc.itemIndent){
                 this.content.push(line.substring(this.misc.markerWidth));
                 this.idx ++;
             }else if(this._type === 'o_list_item' && indentWidth >= this.misc.itemIndent){
                 this.content.push(line.substring(this.misc.markerWidth));
                 this.idx ++;
+            }else if(marker.u_list_item.test(line)){
+                this.open = false;
+            }else if(marker.o_list_item.test(line)){
+                this.open = false;
             }else if(marker.block_quote.test(line)){
                 if(this._type === 'block_quote') {
                     this.content.push(line.substring(indentWidth + 2));
@@ -207,18 +208,18 @@
         if(type === 'doc'){
             return '{}';
         }else if(type === 'thematic'){
-            return '<hr>';
+            return '<hr>\n';
         }else if(type === 'atx'){
             var lvl = block.misc.lvl;
-            return '<h' + lvl + '>{}</h' + lvl + '>';
+            return '<h' + lvl + '>{}</h' + lvl + '>\n';
         }else if(type === 'indented_code'){
-            return '<pre><code>{}</code></pre>';
+            return '<pre><code>{}</code></pre>\n';
         }else if(type === 'paragraph'){
-            return '<p>{}</p>';
+            return '<p>{}</p>\n';
         }else if(type === 'block_quote'){
-            return '<blockquote>{}</blockquote>';
+            return '<blockquote>{}</blockquote>\n';
         }else if(type === 'u_list_item' || type === 'o_list_item'){
-            return '<li>{}</li>';
+            return '<li>{}</li>\n';
         }
     };
 
@@ -237,8 +238,8 @@
                 var type = child._type;
 
                 //wrap list items width '<ul>' or '<ol>'
-                if (!inList && (type === 'u_list_item' || type === 'o_list_item')){
-                    html += type === 'u_list_item' ? '</ul>' : '</ol>';
+                if (!inList && (type === 'u_list_item' || type === 'o_list_item')) {
+                    html += type === 'u_list_item' ? '<ul>\n' : '<ol>\n';
                     inList = true;
                     listType = type;
                     bullet = child.misc.bullet;
@@ -246,16 +247,17 @@
 
                 if (inList && (type !== listType
                     || child.misc.bullet !== bullet)) {
-                    html += listType === 'u_list_item' ? '</ul>' : '</ol>';
+                    html += listType === 'u_list_item' ? '</ul>\n' : '</ol>\n';
                     inList = false;
                     listType = null;
                     bullet = null;
+                    i --;
                     continue;
                 } else {
                     html += this.doTranslate(child);
                 }
             }
-            if(inList){ html += listType === 'u_list_item' ? '</ul>' : '</ol>'; }
+            if(inList){ html += listType === 'u_list_item' ? '</ul>\n' : '</ol>\n'; }
             html = tpl.replace('{}', html);
         }else{
             html = tpl.replace('{}', block.content);
@@ -268,6 +270,7 @@
     global.zmarkdown = {
         compile: function(src){
             var doc = parse(src);
+            console.log(doc);
             return translate(doc);
         }
     };
