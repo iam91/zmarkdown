@@ -26,6 +26,7 @@
 
     Mdeditor.$codeEditor = null;
     Mdeditor.$markdown = null;
+    Mdeditor.$prettify = null;
 
     Mdeditor.prototype = {
         constructor: Mdeditor,
@@ -89,6 +90,11 @@
                     if(zmarkdown){ Mdeditor.$markdown = zmarkdown; }
                 });
             }else{ Mdeditor.$markdown = zmarkdown; }
+
+            if(Mdeditor.$prettify === null){
+                Mdeditor.loadCss(path + 'lib/prettify/prettify.css');
+                Mdeditor.loadScript(path + 'lib/prettify/prettify.js');
+            }
         },
 
         initEditor: function(){
@@ -128,6 +134,7 @@
             var code = this.codeEditor.getValue();
             var html = Mdeditor.$markdown.compile(code);
             $(this.previewEl).html(html);
+            PR.prettyPrint();
         }
     };
 

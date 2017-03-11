@@ -6,7 +6,6 @@
     "use strict";
 
     // todo `blank line` 造成 `loose list`
-    // todo fenced code
 
     var blockMarker = {
         blank_line: /^\s*$/,
@@ -15,7 +14,8 @@
         atx: /^ {0,3}#{1,6}($| +)/,
         setext: /^ {0,3}(-|=)\1{2,}\s*$/,
         indented_code: /^ {4,}/,
-        fenced_code: /^ {0,3}(`|~)\1{2,}/,
+        fenced_code_start: /^ {0,3}(`|~)\1{2,}/,
+        fenced_code_end: /^ {0,3}(`|~)\1{2,}\s*/,
 
         block_quote: /^ {0,3}> /,
         u_list_item: /^ {0,3}[-_*] /,
@@ -35,6 +35,8 @@
         setext: /^ {0,3}(-|=)/,
         u_list_item: /^ {0,3}([-_*])/,
         o_list_item: /^ {0,3}(\d{1,9})(\.|\))/,
+        fenced_code_start: /^ {0,3}(`|~)\1{2,}(.*)/,
+        fenced_code_end: /^/
     };
 
     var helpers = {
@@ -111,10 +113,11 @@
             
         }else if(blockMarker.indented_code.test(line)){
             this.content = line.substring(4) + '\n';
-        }else if(blockMarker.fenced_code.test(line)){
+        }else if(blockMarker.fenced_code_start.test(line)){
 
-            //todo get info string
+            var cap = capture.fenced_code_start.exec(line);
             this.misc.indentWidth = indentWidth;
+            this.misc.lang = cap[2].trim();
 
         }else if(blockMarker.block_quote.test(line)){
             this.content = [line.substring(indentWidth + 2)];
@@ -131,12 +134,12 @@
             var indentWidth = helpers.indentWidth(line);
 
             if(this._type === 'fenced_code'){
-                if(blockMarker.fenced_code.test(line)){
+                if(blockMarker.fenced_code_end.test(line)){
                     this.open = false;
                 }else{
                     this.content += line.substring(Math.min(indentWidth, this.misc.indentWidth)) + '\n';
-                    this.idx ++;
                 }
+                this.idx ++;
             }else if(this._type === 'u_list_item' && indentWidth >= this.misc.itemIndent){
                 this.content.push(line.substring(this.misc.blockMarkerWidth));
                 this.idx ++;
@@ -203,7 +206,7 @@
                     child = new Block('o_list_item', true, true, this.idx, this.src);
                 } else if (blockMarker.indented_code.test(line)) {
                     child = new Block('indented_code', false, true, this.idx, this.src);
-                } else if (blockMarker.fenced_code.test(line)){
+                } else if (blockMarker.fenced_code_start.test(line)){
                     child = new Block('fenced_code', false, true, this.idx, this.src);
                 } else if (!blockMarker.blank_line.test(line)) {
                     //paragraph
@@ -248,6 +251,10 @@
         }else if(type === 'setext'){
             var lvl = block.misc.lvl;
             return '<h' + lvl + '>{}</h' + lvl + '>\n';
+        }else if(type === 'fenced_code'){
+            var lang = block.misc.lang;
+            console.log(lang);
+            return '<pre class="prettyprint lang-' + lang + '"><code>{}</code></pre>\n';
         }else if(type === 'indented_code'){
             return '<pre><code>{}</code></pre>\n';
         }else if(type === 'paragraph'){
