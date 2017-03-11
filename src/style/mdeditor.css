@@ -19,4 +19,5 @@
     box-sizing: border-box;
     width: 50%;
     height: 100%;
+    overflow: auto;
 }
