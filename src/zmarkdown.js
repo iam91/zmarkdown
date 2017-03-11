@@ -6,6 +6,7 @@
     "use strict";
 
     // todo `blank line` 造成 `loose list`
+    // todo fenced code
 
     var blockMarker = {
         blank_line: /^\s*$/,
@@ -14,6 +15,7 @@
         atx: /^ {0,3}#{1,6}($| +)/,
         setext: /^ {0,3}(-|=)\1{2,}\s*$/,
         indented_code: /^ {4,}/,
+        fenced_code: /^ {0,3}(`|~)\1{2,}/,
 
         block_quote: /^ {0,3}> /,
         u_list_item: /^ {0,3}[-_*] /,
@@ -109,6 +111,11 @@
             
         }else if(blockMarker.indented_code.test(line)){
             this.content = line.substring(4) + '\n';
+        }else if(blockMarker.fenced_code.test(line)){
+
+            //todo get info string
+            this.misc.indentWidth = indentWidth;
+
         }else if(blockMarker.block_quote.test(line)){
             this.content = [line.substring(indentWidth + 2)];
         }else{
@@ -123,7 +130,14 @@
             var line = this.src[this.idx];
             var indentWidth = helpers.indentWidth(line);
 
-            if(this._type === 'u_list_item' && indentWidth >= this.misc.itemIndent){
+            if(this._type === 'fenced_code'){
+                if(blockMarker.fenced_code.test(line)){
+                    this.open = false;
+                }else{
+                    this.content += line.substring(Math.min(indentWidth, this.misc.indentWidth)) + '\n';
+                    this.idx ++;
+                }
+            }else if(this._type === 'u_list_item' && indentWidth >= this.misc.itemIndent){
                 this.content.push(line.substring(this.misc.blockMarkerWidth));
                 this.idx ++;
             }else if(this._type === 'o_list_item' && indentWidth >= this.misc.itemIndent){
@@ -189,6 +203,8 @@
                     child = new Block('o_list_item', true, true, this.idx, this.src);
                 } else if (blockMarker.indented_code.test(line)) {
                     child = new Block('indented_code', false, true, this.idx, this.src);
+                } else if (blockMarker.fenced_code.test(line)){
+                    child = new Block('fenced_code', false, true, this.idx, this.src);
                 } else if (!blockMarker.blank_line.test(line)) {
                     //paragraph
                     child = new Block('paragraph', false, true, this.idx, this.src);

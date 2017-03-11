@@ -127,7 +127,6 @@
 
             var code = this.codeEditor.getValue();
             var html = Mdeditor.$markdown.compile(code);
-            var selector = this.selector;
             $(this.previewEl).html(html);
         }
     };
