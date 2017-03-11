@@ -5,7 +5,6 @@
 
     "use strict";
 
-    // todo `blank line` 不会截断 `indented code`
     // todo `blank line` 造成 `loose list`
 
     var blockMarker = {
@@ -27,7 +26,6 @@
         strong_emphasis: /((\*\*|__)([^*]*)\2)/g
     };
 
-    global.inlineMarker = inlineMarker;
 
     //After passing blockMarker test, use capture to the parse the content.
     var capture = {
@@ -148,7 +146,7 @@
                 this.idx ++;
             }else if(blockMarker.indented_code.test(line)){
                 if(this._type === 'indented_code') {
-                    this.content += line.trim() + '\n';
+                    this.content += line.substring(4) + '\n';
                     this.idx++;
                 }else{ this.open = false; }
             }else if(!blockMarker.blank_line.test(line) && this._type === 'paragraph'){
@@ -303,5 +301,7 @@
             return translate(doc);
         }
     };
+
+    global.inlineMarker = inlineMarker;
 
 })(this);

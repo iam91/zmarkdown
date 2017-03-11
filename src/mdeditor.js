@@ -5,12 +5,24 @@
 
     "use strict";
 
-    // todo script and css dependencies loading
-    // todo efficiency of re-rendering on change
-
-    function Mdeditor(){
-        this.codeEditor;
+    if(typeof $ === 'undefined'){
+        return;
     }
+
+    function Mdeditor(){}
+
+    Mdeditor.editor = function(el, options){
+
+        var defaults = {
+            'mode'  : 'markdown',
+            'theme' : 'mdn-like',
+            'path'  : 'src/',
+            'height': '640px'
+        };
+
+        options = $.extend({}, defaults, options);
+        return new Mdeditor().init(el, options);
+    };
 
     Mdeditor.$codeEditor = null;
     Mdeditor.$markdown = null;
@@ -18,47 +30,73 @@
     Mdeditor.prototype = {
         constructor: Mdeditor,
 
-        init: function(editor, options){
-            Mdeditor.$codeEditor = CodeMirror;
-            Mdeditor.$markdown = zmarkdown;
+        init: function(el, options){
+            var options =  this.options = options || {};
 
-            var options     = options || {};
             var classPrefix = options.classPrefix || 'mde-';
-
-            var className = {
+            var className = this.className = {
                 code    : classPrefix + 'code',
                 wrapper : classPrefix + 'wrapper',
                 preview : classPrefix + 'preview'
             };
 
-            var selector = {};
-            for(var cl in className){
-                selector[cl] = '.' + className[cl];
-            }
-            this.selector = selector;
 
             var elements = [
                 '<div class="' + className.wrapper + '">',
                     '<div class="' + className.code + '"></div>',
-                    '<div class="' + className.preview + '"></div>',
+                    '<div class="' + className.preview + ' markdown-body"></div>',
                 '</div>'
             ].join('\n');
+            $(el).append(elements);
 
-            $(editor).html(elements);
+            this.codeEditorEl = $('.' + className.code);
+            this.previewEl = $('.' + className.preview);
+            this.wrapperEl = $('.' + className.wrapper);
 
-            this.initCodeEditor($('.' + className.code)[0]);
-            this.bind();
-            this.compile();
-            /////////////////////
-            var self = this;
-            $('button').click(function(){
-                self.compile();
-                console.log($(selector.preview)[0]);
+            $(this.wrapperEl).css({
+                height: options.height
             });
-            /////////////////////
+
+            this.loadDep();
         },
 
-        initCodeEditor: function(code){
+        loadDep: function(){
+            var path = this.options.path;
+            var self = this;
+            
+            Mdeditor.loadCss(path + 'style/mdeditor.css');
+            Mdeditor.loadCss(path + 'style/preview.css');
+            
+            if(Mdeditor.$codeEditor === null){
+                Mdeditor.loadCss(path + 'lib/codemirror/codemirror.css');
+                Mdeditor.loadCss(path + 'lib/codemirror/theme/' + this.options.theme + '.css');
+                Mdeditor.loadScript(path + 'lib/codemirror/codemirror.js', function(){
+
+                    if(CodeMirror){
+                        Mdeditor.$codeEditor = CodeMirror;
+                        self.initEditor();
+                    }
+
+                    Mdeditor.loadScript(path + 'lib/codemirror/mode/markdown/markdown.js');
+                });
+            }else{
+                Mdeditor.$codeEditor = CodeMirror;
+                self.initEditor();
+            }
+
+            if(Mdeditor.$markdown === null){
+                Mdeditor.loadScript(path + 'zmarkdown.js', function(){
+                    if(zmarkdown){ Mdeditor.$markdown = zmarkdown; }
+                });
+            }else{ Mdeditor.$markdown = zmarkdown; }
+        },
+
+        initEditor: function(){
+            this.initCodeEditor();
+            this.bindCodeEditor();
+        },
+
+        initCodeEditor: function(){
 
             var options = {
                 mode         : 'markdown',
@@ -67,7 +105,22 @@
                 lineWrapping : true
             };
 
-            this.codeEditor = Mdeditor.$codeEditor(code, options);
+            var codeEl = this.codeEditorEl;
+
+            this.codeEditor = Mdeditor.$codeEditor($(codeEl)[0], options);
+
+            $(codeEl).children('.CodeMirror').css({
+                height: '100%'
+            });
+        },
+
+        bindCodeEditor: function(){
+            var ce = this.codeEditor;
+            var self = this;
+
+            ce.on('change', function(){
+                self.compile();
+            });
         },
 
         compile: function(){
@@ -75,16 +128,7 @@
             var code = this.codeEditor.getValue();
             var html = Mdeditor.$markdown.compile(code);
             var selector = this.selector;
-            $(selector.preview).html(html);
-        },
-
-        bind: function(){
-            var ce = this.codeEditor;
-            var self = this;
-
-            // ce.on('change', function(){
-            //     self.compile();
-            // });
+            $(this.previewEl).html(html);
         }
     };
 
@@ -95,7 +139,7 @@
         script.src = fileName;
 
         script.onload = function(){
-            callback();
+            typeof callback === 'function' ? callback() : null;
         };
 
         document.getElementsByTagName('head')[0].appendChild(script);
