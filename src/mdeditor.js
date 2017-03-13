@@ -59,6 +59,11 @@
             });
 
             this.loadDep();
+
+            var self = this;
+            $('button').click(function(){
+                self.compile();
+            });
         },
 
         loadDep: function(){
@@ -86,10 +91,10 @@
             }
 
             if(Mdeditor.$markdown === null){
-                Mdeditor.loadScript(path + 'zmarkdown.js', function(){
-                    if(zmarkdown){ Mdeditor.$markdown = zmarkdown; }
+                Mdeditor.loadScript(path + 'mdparser.js', function(){
+                    if(mdparser){ Mdeditor.$markdown = mdparser; }
                 });
-            }else{ Mdeditor.$markdown = zmarkdown; }
+            }else{ Mdeditor.$markdown = mdparser; }
 
             if(Mdeditor.$prettify === null){
                 Mdeditor.loadCss(path + 'lib/prettify/prettify.css');
