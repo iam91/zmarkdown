@@ -33,13 +33,15 @@
     var inline = {
         code_span       : /(`([^`]*)`)/g,
         emphasis        : /((\*|_)([^*]*)\2)/g,
-        strong_emphasis : /((\*\*|__)([^*]*)\2)/g
+        strong_emphasis : /((\*\*|__)([^*]*)\2)/g,
+        link            : /\[(.*?)]\s*\((.*?)\)/g,
+        image           : /!\[(.*?)]\s*\((.*?)\)/g
     };
 
-    //used to capture the content
-    var capture = {
+    //used to blockCapture the content
+    var blockCapture = {
         atx               : /^ {0,3}(#{1,6})(.* (?=#)|.*$)/,
-        se_text            : /^ {0,3}(-|=)/,
+        se_text           : /^ {0,3}(-|=)/,
         u_list_item       : /^ {0,3}([-_*])/,
         o_list_item       : /^ {0,3}(\d{1,9})(\.|\))/,
         fenced_code_start : /^ {0,3}(`|~)\1{2,}(.*)/
@@ -49,6 +51,14 @@
         indentWidth: function(line){
             var cap = /^ */.exec(line);
             return cap[0].length;
+        },
+
+        setHardBreak: function(line){
+            var trimWidth = line.length - line.trim().length;
+            if(trimWidth > 1){
+                line = line.trim() + '\n';
+            }
+            return line;
         }
     };
 
@@ -151,13 +161,13 @@
         var indentWidth = helpers.indentWidth(line);
         if(this._type === 'atx'){
 
-            var cap = capture.atx.exec(line);
+            var cap = blockCapture.atx.exec(line);
             this.misc.lvl = cap[1].length;
             this.content += cap[2].trim();
 
         }else if(this._type === 'u_list_item' || this._type === 'o_list_item'){
 
-            var cap = capture[this._type].exec(line);
+            var cap = blockCapture[this._type].exec(line);
             this.misc.bullet = cap[1];
             this.misc.bulletWidth = indentWidth + cap[1].length + 1;
 
@@ -176,13 +186,13 @@
 
         }else if(this._type === 'fenced_code'){
 
-            var cap = capture.fenced_code_start.exec(line);
+            var cap = blockCapture.fenced_code_start.exec(line);
             this.misc.indentWidth = indentWidth;
             this.misc.lang = cap[2].trim();
 
         }else{
             //paragraph
-            this.content = line.trim();
+            this.content = helpers.setHardBreak(line.substring(indentWidth));
         }
     };
 
@@ -209,7 +219,7 @@
                 this.idx ++;
             }else if(this._type === 'paragraph' && other.se_text.test(line)){
 
-                var cap = capture.se_text.exec(line);
+                var cap = blockCapture.se_text.exec(line);
                 this._type = 'se_text';
                 this.misc.lvl = cap[1] === '-' ? 2 : 1;
                 this.idx ++;
@@ -218,7 +228,7 @@
                 this.idx ++;
             }else if(this._type === 'paragraph'
                 && !other.not_paragraph.test(line) && !other.blank_line.test(line)){
-                this.content += line;
+                this.content += helpers.setHardBreak(line.substring(indentWidth));
                 this.idx ++;
             }else{ this.open = false; }
             if(!this.open){ break; }
@@ -243,7 +253,10 @@
         content = content
             .replace(inline.strong_emphasis, '<strong>$3</strong>')
             .replace(inline.emphasis, '<em>$3</em>')
-            .replace(inline.code_span, '<code>$2</code>');
+            .replace(inline.code_span, '<code>$2</code>')
+            .replace(inline.image, '<img src="$2" alt="$1">')
+            .replace(inline.link, '<a href="$2">$1</a>');
+
         return content;
     }
 
@@ -312,7 +325,13 @@
             if(inList){ html += listType === 'u_list_item' ? '</ul>\n' : '</ol>\n'; }
             html = tpl.replace('{}', html);
         }else{
-            html = parseInline(block.content);
+            var type = block._type;
+            if(type.indexOf('code') < 0){
+                html = parseInline(block.content);
+            }
+            if(type === 'paragraph'){
+                html = html.trim().replace(/\n/g, '<br>');
+            }
             html = tpl.replace('{}', html);
         }
         return html;
